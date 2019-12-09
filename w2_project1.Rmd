@@ -1,0 +1,122 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### Week 2: Course Project 1
+
+**Cleaning workspace**
+```{r cleaning workspace}
+rm(list=ls())
+```
+
+**Reading data and showing first 6 rows and number of total rows**
+```{r reading data}
+activity_data <- read.csv("activity.csv")
+head(activity_data)
+nrow(activity_data)
+```
+
+**Eliminating NAs**
+```{r}
+activity_data_naomit <- na.omit(activity_data)
+```
+
+**Calculating steps per day**
+```{r}
+library(data.table)
+setDT(activity_data_naomit)
+head(steps_by_day <- activity_data_naomit[, .(steps_date = sum(steps)), by = date])
+```
+
+**Steps histogram**
+```{r message=FALSE}
+library(ggplot2)
+qplot(steps_by_day$steps_date, bins = 10, colour = I("white"))
+```
+
+**Mean and median (steps)**
+```{r}
+mean(steps_by_day$steps_date)
+median(steps_by_day$steps_date)
+```
+
+**Time series plot, interval vs mean(steps)**
+```{r}
+(mean_by_interval <- activity_data_naomit[, .(mean_steps=mean(steps)), by = interval])
+plot(mean_by_interval, type = "l", xaxt = "n")
+axis(1, seq(0, 2355, length.out = 288), labels = mean_by_interval$interval,
+     las = 2, cex.axis=.6)
+```
+
+**Maximum number of steps**
+```{r message=FALSE}
+library(dplyr)
+arrange(mean_by_interval, desc(mean_steps))[1,]
+```
+
+**Total of NAs by steps, date & interval**
+```{r}
+apply(activity_data, 2, function(M) sum(is.na(M)))
+```
+
+**Filling NAs with the mean of the interval**
+```{r}
+setDT(activity_data)
+mean_steps_nas <- merge(activity_data[is.na(steps),"interval"],
+                        mean_by_interval, sort = F)$mean_steps
+activity_data_full <- copy(activity_data)
+activity_data_full[,steps := as.numeric(steps)]
+activity_data_full[is.na(steps), steps := mean_steps_nas][]
+```
+
+**Total of NAs**
+```{r}
+apply(activity_data_full, 2, function(M) sum(is.na(M)))
+```
+
+**Plotting interval vs mean(steps) with imputed data**
+```{r}
+mean_by_interval_full <- activity_data_full[, .(mean_steps=mean(steps)),
+                                            by = interval]
+plot(mean_by_interval_full, type = "l", xaxt = "n")
+axis(1, seq(0,2355,length.out = 288),labels = mean_by_interval_full$interval,
+     las = 2, cex.axis=.6)
+```
+
+**Calculating steps per day**
+```{r}
+steps_by_day_full <- activity_data_full[, .(steps_date = sum(steps)), by = date]
+```
+
+**Histogram of the total numbers of steps**
+```{r}
+qplot(steps_by_day_full$steps_date, bins = 10, colour = I("white"))
+```
+
+**Calculating mean and median of the full data set**
+```{r}
+mean(steps_by_day_full$steps_date)
+median(steps_by_day_full$steps_date)
+```
+
+#### The imputed data dosen't impact the mean, nevertheless change the median and the hisogram because there are more values to show.
+
+**Creating group_days factor variable (the names of the week days are in Spanish)**
+```{r}
+weekend_log <- weekdays(as.Date(activity_data_full$date)) %in%
+      sort(weekdays(Sys.Date()+1:7))[c(1,6)]
+group_days <- factor(levels = c("weekend", "weekday"))
+group_days[weekend_log] <- "weekend"
+group_days[!weekend_log] <- "weekday"
+table(group_days)
+table(weekdays(as.Date(activity_data_full$date)))
+activity_data_full[, group_days := group_days][]
+```
+
+**Plotting by interval and group_days with lattice**
+```{r}
+mean_by_interval_full2 <- activity_data_full[, .(mean_steps=mean(steps)),
+                                            by = .(interval, group_days)]
+library(lattice)
+xyplot(mean_steps ~ interval | group_days, data = mean_by_interval_full2,
+       layout = c(1, 2), type = "l")
+```
